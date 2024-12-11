@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import os
 import traceback
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterator, Union
@@ -22,6 +22,7 @@ from isce3.cal import (
     parse_triangular_trihedral_cr_csv,
     point_target_info as pti,
     TriangularTrihedralCornerReflector as CornerReflector,
+    enu_to_ecef_rotation,
 )
 
 import nisar
@@ -205,20 +206,29 @@ def add_pta_args(
     )
 
 
-def get_radar_grid_coords(llh_deg, slc, freq_group):
+def get_radar_grid_coords(
+    llh_deg: Sequence[float],
+    slc: RSLC,
+    freq_group: str,
+    shift_vector: Sequence[float] | None = [0, 0, 0],
+):
     """Perform geo2rdr conversion of longitude, latitude, and
     height-above-ellipsoid (LLH) coordinates to radar geometry, and return the
     resulting coordinates with respect to the input product's radar grid.
 
     Parameters
     ------------
-    llh_deg: array of 3 floats
-        Corner reflector geodetic coordinates in lon (deg), lat (deg), and height (m)
-        array size = 3
-    slc: nisar.products.readers.RSLC
+    llh_deg : sequence of 3 floats
+        Corner reflector geodetic coordinates in lon (deg), lat (deg), and height (m).
+        Sequence length = 3
+    slc : nisar.products.readers.RSLC
         NISAR RSLC HDF5 product data
-    freq_group: str
+    freq_group : str
        RSLC data file frequency selection 'A' or 'B'
+    shift_vector : sequence of 3 floats, or None
+        Corner reflector displacement offset in ENU coordinate system, or None if no
+        shift is to be applied.
+        Defaults to None.
 
     Returns
     --------
@@ -227,8 +237,18 @@ def get_radar_grid_coords(llh_deg, slc, freq_group):
     line: float
         Point target azimuth time bin location
     """
+    if len(llh_deg) != 3:
+        raise ValueError("llh_deg must be a sequence of length 3.")
 
     llh = np.array([np.deg2rad(llh_deg[0]), np.deg2rad(llh_deg[1]), llh_deg[2]])
+
+    if shift_vector is not None:
+        if len(shift_vector) != 3:
+            raise ValueError("shift_vector must be a sequence of length 3.")
+        shift_quat: isce3.core.Quaternion = enu_to_ecef_rotation(llh[0], llh[1])
+        ecef_shift = shift_quat.rotate(shift_vector)
+    else:
+        ecef_shift = [0, 0, 0]
 
     # Assume we want the WGS84 ellipsoid (a common assumption in isce3)
     # and the radar grid is zero Doppler (always the case for NISAR products).
@@ -241,7 +261,7 @@ def get_radar_grid_coords(llh_deg, slc, freq_group):
     if radargrid.ref_epoch != orbit.reference_epoch:
         raise ValueError('Reference epoch of radar grid and orbit are different!')
 
-    xyz = ellipsoid.lon_lat_to_xyz(llh)
+    xyz = ellipsoid.lon_lat_to_xyz(llh) + ecef_shift
 
     aztime, slant_range = isce3.geometry.geo2rdr_bracket(
         xyz=xyz,
