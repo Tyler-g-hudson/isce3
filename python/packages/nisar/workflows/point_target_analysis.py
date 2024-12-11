@@ -567,6 +567,7 @@ def analyze_corner_reflectors(
     fs_bw_ratio: float = 1.2,
     window_type: str = "rect",
     window_parameter: float = 0.0,
+    tectonic_correction: bool = False,
     cuts: bool = False,
 ) -> list[dict[str, Any]]:
     r"""
@@ -655,6 +656,10 @@ def analyze_corner_reflectors(
         ignored if `window_type` was 'rect' or if `predict_null` was false. The same
         shape parameter is assumed to have been used for both range & azimuth focusing.
         Defaults to 0.
+    tectonic_correction : bool, optional
+        If True, apply a correction to the expected locations of the corner reflectors
+        based on their tectonic velocity between the survey date and observation date.
+        Defaults to False.
     cuts : bool, optional
         Whether to include range & azimuth cuts through the peak in the results.
         Defaults to False.
@@ -823,9 +828,9 @@ def analyze_corner_reflectors(
 
     results = []
     for cr in corner_reflectors:
-        if isinstance(cr, CornerReflector):
+        if isinstance(cr, nisar.cal.CornerReflector) and tectonic_correction:
             observation_datetime = (
-                orbit.reference_epoch()
+                orbit.reference_epoch
                 + isce3.core.TimeDelta(rslc.getZeroDopplerTime()[0])
             )
 
