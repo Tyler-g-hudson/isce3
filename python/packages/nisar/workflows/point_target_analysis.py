@@ -525,9 +525,8 @@ def check_slc_freq_pols(
 
 
 def get_tectonic_displacement(
-    reference_epoch: isce3.core.DateTime,
-    cr: CornerReflector | nisar.cal.CornerReflector,
-    product: nisar.products.readers.Base,
+    observation_datetime: isce3.core.DateTime,
+    cr: nisar.cal.CornerReflector,
 ) -> np.ndarray:
     """
     Acquire the tectonic movement of a corner reflector, in an ENU displacement vector,
@@ -535,12 +534,10 @@ def get_tectonic_displacement(
 
     Parameters
     ----------
-    reference_epoch : isce3.core.DateTime
-        The reference epoch of the observation.
-    cr : isce3.cal.TriangularTrihedralCornerReflector | nisar.cal.CornerReflector
+    observation_datetime : isce3.core.DateTime
+        The date and time of the observation.
+    cr : nisar.cal.CornerReflector
         The corner reflector.
-    product : Any NISAR product reader in the nisar.products.readers hierarchy
-        The reader for the product.
 
     Returns
     -------
@@ -548,10 +545,6 @@ def get_tectonic_displacement(
         The displacement of the corner reflector in the time between the last survey
         and the observation.
     """
-    observation_datetime = (
-        reference_epoch + isce3.core.TimeDelta(product.getZeroDopplerTime()[0])
-    )
-
     velocity = cr.velocity
     survey_date = cr.survey_date
 
@@ -798,7 +791,7 @@ def analyze_corner_reflectors(
     # coordinates.
     def get_point_target_info(
         target_llh: isce3.core.LLH,
-        displacement: np.ndarray,
+        displacement: Sequence[float] | None,
     ) -> dict[str, Any]:
         # Convert lon & lat to degrees.
         lon, lat, height = target_llh.to_vec3()
@@ -830,9 +823,17 @@ def analyze_corner_reflectors(
 
     results = []
     for cr in corner_reflectors:
-        displacement = get_tectonic_displacement(
-            reference_epoch=orbit.reference_epoch(), cr=cr, product=rslc
-        )
+        if isinstance(cr, CornerReflector):
+            observation_datetime = (
+                orbit.reference_epoch()
+                + isce3.core.TimeDelta(rslc.getZeroDopplerTime()[0])
+            )
+
+            displacement = get_tectonic_displacement(
+                observation_datetime=observation_datetime, cr=cr
+            )
+        else:
+            displacement = None
 
         try:
             cr_info = get_point_target_info(cr.llh, displacement=displacement)
