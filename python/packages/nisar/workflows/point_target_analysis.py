@@ -212,7 +212,8 @@ def get_radar_grid_coords(
     freq_group: str,
     shift_vector: Sequence[float] | None = [0, 0, 0],
 ):
-    """Perform geo2rdr conversion of longitude, latitude, and
+    """
+    Perform geo2rdr conversion of longitude, latitude, and
     height-above-ellipsoid (LLH) coordinates to radar geometry, and return the
     resulting coordinates with respect to the input product's radar grid.
 
@@ -523,6 +524,42 @@ def check_slc_freq_pols(
     return (freq, pol)
 
 
+def get_tectonic_displacement(
+    reference_epoch: isce3.core.DateTime,
+    cr: CornerReflector | nisar.cal.CornerReflector,
+    product: nisar.products.readers.Base,
+) -> np.ndarray:
+    """
+    Acquire the tectonic movement of a corner reflector, in an ENU displacement vector,
+    between the time of surveying and the time of observation.
+
+    Parameters
+    ----------
+    reference_epoch : isce3.core.DateTime
+        The reference epoch of the observation.
+    cr : isce3.cal.TriangularTrihedralCornerReflector | nisar.cal.CornerReflector
+        The corner reflector.
+    product : Any NISAR product reader in the nisar.products.readers hierarchy
+        The reader for the product.
+
+    Returns
+    -------
+    np.ndarray
+        The displacement of the corner reflector in the time between the last survey
+        and the observation.
+    """
+    observation_datetime = (
+        reference_epoch + isce3.core.TimeDelta(product.getZeroDopplerTime()[0])
+    )
+
+    velocity = cr.velocity
+    survey_date = cr.survey_date
+
+    time_delta: isce3.core.TimeDelta = observation_datetime - survey_date
+
+    return velocity * time_delta.total_seconds()
+
+
 def analyze_corner_reflectors(
     corner_reflectors: CornerReflectorIterable,
     rslc: nisar.products.readers.RSLC,
@@ -759,13 +796,16 @@ def analyze_corner_reflectors(
 
     # Returns point target info dict for a single target, given its location in geodetic
     # coordinates.
-    def get_point_target_info(target_llh: isce3.core.LLH) -> dict[str, Any]:
+    def get_point_target_info(
+        target_llh: isce3.core.LLH,
+        displacement: np.ndarray,
+    ) -> dict[str, Any]:
         # Convert lon & lat to degrees.
         lon, lat, height = target_llh.to_vec3()
         llh_deg = np.asarray([np.rad2deg(lon), np.rad2deg(lat), height])
 
         # Get pixel-space coordinates of the target within the image grid.
-        col, row = get_radar_grid_coords(llh_deg, rslc, freq)
+        col, row = get_radar_grid_coords(llh_deg, rslc, freq, shift_vector=displacement)
 
         # Get point target info.
         return pti.analyze_point_target(
@@ -790,8 +830,12 @@ def analyze_corner_reflectors(
 
     results = []
     for cr in corner_reflectors:
+        displacement = get_tectonic_displacement(
+            reference_epoch=orbit.reference_epoch(), cr=cr, product=rslc
+        )
+
         try:
-            cr_info = get_point_target_info(cr.llh)
+            cr_info = get_point_target_info(cr.llh, displacement=displacement)
         except Exception:
             errmsg = traceback.format_exc()
             warnings.warn(
