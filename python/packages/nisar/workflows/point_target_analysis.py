@@ -92,6 +92,16 @@ def cmd_line_parse():
     )
     add_pta_args(parser=parser, predict_null_option=True)
     parser.add_argument(
+        "--no-tectonic-correction",
+        dest="tectonic_correction",
+        action='store_false',
+        help=(
+            "Bypass tectonic movement correction. Tectonic movement correction is also "
+            "automatically bypassed for UAVSAR-formatted CSV files and single point "
+            "targets passed by the --LLH command."
+        )
+    )
+    parser.add_argument(
         "--plots",
         action='store_true',
         help="Generate interactive plots"
@@ -405,6 +415,11 @@ def slc_pt_performance(
         (often the case in point target simulations).
     pta_output: str
         point target metrics output JSON file (directory+filename)
+
+    Notes
+    -----
+    No corrections to the corner reflector position are applied for plate motion, solid
+    earth tides, etc.
     """
 
     # Raise an exception if input is a GSLC HDF5 file
@@ -777,8 +792,8 @@ def analyze_corner_reflectors(
 
     Notes
     -----
-    No corrections to the corner reflector position are applied for tectonic plate
-    motion, solid earth tides, etc.
+    No corrections to the corner reflector position are applied for solid earth tides,
+    etc.
 
     References
     ----------
@@ -951,6 +966,7 @@ def process_corner_reflector_csv(
     fs_bw_ratio: float,
     window_type: str,
     window_parameter: float,
+    tectonic_correction: bool,
     cuts: bool,
 ) -> None:
     """
@@ -1038,6 +1054,11 @@ def process_corner_reflector_csv(
         height of the window. For a Kaiser window, it is the beta parameter. It is
         ignored if `window_type` was 'rect' or if `predict_null` was false. The same
         shape parameter is assumed to have been used for both range & azimuth focusing.
+    tectonic_correction : bool
+        If True, apply a correction to the expected locations of the corner reflectors
+        based on their tectonic velocity between the survey date and observation date.
+        No tectonic correction will be applied regardless of this variable if the input
+        CSV file is in UAVSAR format. Defaults to False.
     cuts : bool
         Whether to include range & azimuth cuts through the peak in the results.
     """
@@ -1086,6 +1107,7 @@ def process_corner_reflector_csv(
         fs_bw_ratio=fs_bw_ratio,
         window_type=window_type,
         window_parameter=window_parameter,
+        tectonic_correction=tectonic_correction,
         cuts=cuts,
     )
 
@@ -1112,6 +1134,7 @@ if __name__ == "__main__":
     window_type = inputs.window_type
     window_parameter = inputs.window_parameter
     shift_domain = inputs.peak_find_domain
+    tectonic_correction = inputs.tectonic_correction
 
     if (corner_reflector_csv is not None) and (cr_llh is None):
         # The user provided a corner reflector CSV file.
@@ -1130,6 +1153,7 @@ if __name__ == "__main__":
             fs_bw_ratio=fs_bw_ratio,
             window_type=window_type,
             window_parameter=window_parameter,
+            tectonic_correction=tectonic_correction,
             cuts=cuts,
         )
     elif (cr_llh is not None) and (corner_reflector_csv is None):
