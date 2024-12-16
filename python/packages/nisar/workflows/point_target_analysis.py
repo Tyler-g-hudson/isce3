@@ -966,8 +966,8 @@ def process_corner_reflector_csv(
     fs_bw_ratio: float,
     window_type: str,
     window_parameter: float,
-    tectonic_correction: bool,
     cuts: bool,
+    tectonic_correction: bool = False,
 ) -> None:
     """
     Run point target analysis on corner reflectors from a CSV file.
@@ -1054,13 +1054,13 @@ def process_corner_reflector_csv(
         height of the window. For a Kaiser window, it is the beta parameter. It is
         ignored if `window_type` was 'rect' or if `predict_null` was false. The same
         shape parameter is assumed to have been used for both range & azimuth focusing.
-    tectonic_correction : bool
+    cuts : bool
+        Whether to include range & azimuth cuts through the peak in the results.
+    tectonic_correction : bool, optional
         If True, apply a correction to the expected locations of the corner reflectors
         based on their tectonic velocity between the survey date and observation date.
         No tectonic correction will be applied regardless of this variable if the input
         CSV file is in UAVSAR format. Defaults to False.
-    cuts : bool
-        Whether to include range & azimuth cuts through the peak in the results.
     """
     # Read input RSLC product.
     rslc_hdf5 = os.fspath(rslc_hdf5)
