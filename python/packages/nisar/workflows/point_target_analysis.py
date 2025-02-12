@@ -22,7 +22,6 @@ from isce3.cal import (
     parse_triangular_trihedral_cr_csv,
     point_target_info as pti,
     TriangularTrihedralCornerReflector as CornerReflector,
-    enu_to_ecef_rotation,
 )
 
 import nisar
@@ -216,45 +215,6 @@ def add_pta_args(
     )
 
 
-def get_ecef_shift(
-    llh: Sequence[float],
-    shift_vector: Sequence[float] | None = None,
-) -> list[float]:
-    """
-    Given an LLH vector and ENU vector, return the ECEF representation of the ENU
-    vector relative to the given LLH location.
-
-    Parameters
-    ----------
-    llh : Sequence of float
-        The input LLH - a sequence of three floats in lon, lat, height
-    shift_vector : Sequence of float | None, optional
-        The ENU vector that the LLH is to be shifted by. Defaults to None.
-
-    Returns
-    -------
-    list of float
-        The ECEF representation of `shift_vector` relative to `llh`.
-
-    Raises
-    ------
-    ValueError
-        If `shift_vector` or `llh` are given as a sequence with a length not equal to 3.
-    """
-    if shift_vector is None:
-        return [0, 0, 0]
-        return [0, 0, 0]
-
-    if len(llh) != 3:
-        raise ValueError("llh must be a sequence of length 3.")
-
-    if len(shift_vector) != 3:
-        raise ValueError("shift_vector must be a sequence of length 3 or None.")
-
-    shift_quat: isce3.core.Quaternion = enu_to_ecef_rotation(llh[0], llh[1])
-    return shift_quat.rotate(shift_vector)
-
-
 def get_radar_grid_coords(
     llh_deg: Sequence[float],
     slc: RSLC,
@@ -292,7 +252,7 @@ def get_radar_grid_coords(
 
     llh = np.array([np.deg2rad(llh_deg[0]), np.deg2rad(llh_deg[1]), llh_deg[2]])
 
-    ecef_shift = get_ecef_shift(llh=llh, shift_vector=shift_vector)
+    ecef_shift = pti.get_ecef_shift(llh=llh, shift_vector=shift_vector)
 
     # Assume we want the WGS84 ellipsoid (a common assumption in isce3)
     # and the radar grid is zero Doppler (always the case for NISAR products).

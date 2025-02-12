@@ -5,15 +5,18 @@ Analyze a point target in a complex*8 file.
 from __future__ import annotations
 
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass
 from warnings import warn
 
 import numpy as np
 
-from isce3.core import DateTime, LUT2d
+from isce3.core import DateTime, LUT2d, Quaternion
 from isce3.image.v2 import resample_to_coords
 from isce3.io.dataset import DatasetReader
 from isce3.product import RadarGridParameters
+
+from .corner_reflector import enu_to_ecef_rotation
 
 desc = __doc__
 
@@ -27,6 +30,46 @@ class UnsupportedWindow(Exception):
     """Raised if window_type input is not supported."""
 
     pass
+
+
+def get_ecef_shift(
+    llh: Sequence[float],
+    shift_vector: Sequence[float] | None = None,
+) -> list[float]:
+    """
+    Given an LLH vector and ENU vector, return the ECEF representation of the ENU
+    vector relative to the given LLH location.
+
+    Parameters
+    ----------
+    llh : Sequence of float
+        The input LLH - a sequence of three floats in lon, lat, height
+    shift_vector : Sequence of float | None, optional
+        The ENU vector that the LLH is to be shifted by. Defaults to None.
+
+    Returns
+    -------
+    list of float
+        The ECEF representation of `shift_vector` relative to `llh`.
+
+    Raises
+    ------
+    ValueError
+        If `shift_vector` or `llh` are given as a sequence with a length not equal to 3.
+    """
+    if shift_vector is None:
+        return [0, 0, 0]
+        return [0, 0, 0]
+
+    if len(llh) != 3:
+        raise ValueError("llh must be a sequence of length 3.")
+
+    if len(shift_vector) != 3:
+        raise ValueError("shift_vector must be a sequence of length 3 or None.")
+
+    shift_quat: Quaternion = enu_to_ecef_rotation(llh[0], llh[1])
+    return shift_quat.rotate(shift_vector)
+
 
 def get_chip(x: DatasetReader, i: float, j: float, nchip: int = 64) -> np.ndarray:
     """
