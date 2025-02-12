@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
+from warnings import warn
 
 import isce3
 import iscetest
@@ -14,7 +16,8 @@ from numpy.fft import fftfreq, fftshift, ifft
 from numpy.typing import ArrayLike
 from pytest import mark
 
-from isce3.cal.point_target_info import analyze_point_target
+from isce3.cal.point_target_info import analyze_point_target, get_ecef_shift
+
 
 class RectNotch:
     def __init__(self, freq: float, bandwidth: float):
@@ -425,6 +428,181 @@ def test_simulated_geocoded_cr(
 
     if len(err_msgs) > 0:
         raise AssertionError("\n\t" + "\n\t".join(err_msgs))
+
+
+def get_llh_with_shift(
+    llh: Sequence[float],
+    shift_vector: Sequence[float] = [0, 0, 0],
+) -> list[float]:
+    """
+    Given a position in LLH coordinates and an ENU vector by which that position is
+    shifted, return an LLH that has been shifted by the ENU vector.
+
+    This estimation is expected to be inaccurate at the poles and at heights != 0 above
+    or below the ellipsoid.
+    
+    Algorithm
+    ---------
+    This function implements a trigonometric approximation of the change in an LLH
+    position when shifted by a number of meters east/north/up.
+    Inputs: ENU (meters), LLH_0 (radians, radians, meters).
+
+    R_ew = ellipsoid radius east/west at LLH_0.
+    R_ns = ellipsoid radius north/south at LLH_0.
+
+    E, N, U = East, North, Up components of ENU
+    lon_0, lat_0, h_0 = longitude, latitude, height components of LLH_0
+
+    theta = arctan2(E, R_ew)
+    lon_1 = lon_0 + theta
+
+    phi = arctan2(N, R_ns)
+    lat_1 = lat_0 + phi
+
+    h_1 = h_0 + U
+
+    return [lon_1, lat_1, h_1]
+
+    Parameters
+    ----------
+    llh : Sequence[float]
+        The input LLH, in radians (lon, lat) and meters (height).
+    shift_vector : Sequence[float], optional
+        The ENU shift vector, in meters. Defaults to [0, 0, 0]
+
+    Returns
+    -------
+    list of 3 floats
+        The longitude, latitude, and height of the shifted position.
+    """
+    ellipsoid = isce3.core.Ellipsoid()
+
+    h_0 = llh[2]
+
+    if abs(h_0) >= 1:
+        warn(
+            f"LLH height {h_0} is not close to 0; Trigonometric approximation of ENU "
+            "shift is expected to be inaccurate at this height."
+        )
+
+    # Ellipsoid.r_north computes the radius of curvature in the north-south direction.
+    r_north = ellipsoid.r_north(llh[1])
+    # Ellipsoid.r_east computes the transverse radius of curvature, perpendicular to
+    # the north-south direction. To convert this into the radius of a parallel of
+    # latitude (i.e. the radius of a circle around the latitude line of the ellipse at
+    # a given latitude) this must be multiplied by the cosine of the latitude.
+    r_east = ellipsoid.r_east(llh[1]) * np.cos(llh[1])
+
+    # Theta is the trigonometric approximation of the effect of a given move in the east
+    # direction at this latitude on the overall longitudinal position.
+    theta = np.arctan2(shift_vector[0], r_east)
+    # Phi is the trigonometric approximation of the effect of a given move in the north
+    # direction at this latitude on the overall latitudinal position.
+    phi = np.arctan2(shift_vector[1], r_north)
+
+    # Add the change approximations to the longitude/latitude.
+    lon_1 = llh[0] + theta
+    lat_1 = llh[1] + phi
+    # The height portion of the output vector can just be directly shifted by the up
+    # portion of the ENU shift vector.
+    h_1 = llh[2] + shift_vector[2]
+
+    return [lon_1, lat_1, h_1]
+
+
+def check_cr_tectonic_estimation(
+    llh_rad: Sequence[float],
+    enu: Sequence[float],
+    rtol: float,
+) -> None:
+    """
+    Check the trigonometric and quaternion-based methods of estimating a shifted LLH
+    against each other.
+
+    Parameters
+    ----------
+    llh_rad : Sequence[float]
+        The input LLH, in radians (lon, lat) and meters (height).
+    enu : Sequence[float]
+        The ENU shift vector, in meters. Defaults to [0, 0, 0]
+    rtol : float
+        The tolerance of the check, in meters, between the ISCE3 estimate and the
+        trigonometric estimate.
+    """
+    if abs(enu[2]) > 1.:
+        warn(
+            f"ENU {enu} given for shift estimation test. Trigonometric shift "
+            "estimation is not expected accurate for heights and upward shifts far "
+            "from 0."
+        )
+    if abs(llh_rad[2]) > 1.:
+        warn(
+            f"LLH {llh_rad} given for shift estimation test. Trigonometric shift "
+            "estimation is not expected accurate for heights and upward shifts far "
+            "from 0."
+        )
+    if abs(llh_rad[1]) > 80.:
+        warn(
+            f"LLH {llh_rad} given for shift estimation test. Trigonometric shift "
+            "estimation is not expected accurate for latitudes more than 80 degrees "
+            "from the equator."
+        )
+
+    ellipsoid = isce3.core.Ellipsoid()
+
+    ecef_shift = get_ecef_shift(llh=llh_rad, shift_vector=enu)
+
+    loose_llh = get_llh_with_shift(llh_rad, enu)
+
+    official_estimation = ellipsoid.lon_lat_to_xyz(llh_rad) + ecef_shift
+    trigonometric_estimation = ellipsoid.lon_lat_to_xyz(loose_llh)
+
+    # this if statement would be removed for an actual test
+    try:
+        assert np.linalg.norm(trigonometric_estimation - official_estimation) < rtol
+    except:
+        print("TECTONIC ESTIMATION FAILED TOLERANCE CHECK.")
+        print(
+            f"INPUT LLH : "
+            f"{np.rad2deg(llh_rad[0])} deg, {np.rad2deg(llh_rad[1])} deg, {llh_rad[2]}m"
+        )
+        print(f"INPUT ENU: {enu}")
+        print(f"TOLERANCE: {rtol}m")
+        print(f"OFFICIAL ESTIMATE: {official_estimation}")
+        print(f"TRIGONOMETRIC ESTIMATE: {trigonometric_estimation}")
+        print(
+            "DISTANCE: "
+            f"{np.linalg.norm(trigonometric_estimation - official_estimation)}m"
+        )
+        raise
+
+
+@mark.parametrize(
+    "enu,rtol",
+    [
+        ([1, 0, 0], 5e-7),
+        ([-1, 0, 0], 5e-7),
+        ([0, 1, 0], 1e-7),
+        ([0, -1, 0], 1e-7),
+        ([1, 1, 0], 1.1e-6),
+        ([-1, -1, 0], 1.1e-6),
+        ([1, -1, 0], 1.1e-6),
+        ([-1, 1, 0], 1.1e-6),
+    ]
+)
+def test_ecef_shift(enu: Sequence[float], rtol: float):
+    # The longitude and latitude positions to test
+    lon_params = np.arange(-np.pi, np.pi, np.pi/180)
+    lat_params = np.arange(-np.deg2rad(80), np.deg2rad(80), np.pi/180)
+
+    for i in range(len(lon_params)):
+        for j in range(len(lat_params)):
+
+            # This LLH is defined by the position on the longitude and latitude grids
+            llh = [lon_params[i], lat_params[j], 0]
+
+            # Test the shift methods
+            check_cr_tectonic_estimation(llh, enu, rtol=rtol)
 
 
 if __name__ == "__main__":
