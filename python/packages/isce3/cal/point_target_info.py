@@ -59,7 +59,6 @@ def get_ecef_shift(
     """
     if shift_vector is None:
         return [0, 0, 0]
-        return [0, 0, 0]
 
     if len(llh) != 3:
         raise ValueError("llh must be a sequence of length 3.")
