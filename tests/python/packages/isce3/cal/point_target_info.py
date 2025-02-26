@@ -431,15 +431,17 @@ def test_simulated_geocoded_cr(
 
 
 def get_llh_with_shift(
-    llh: Sequence[float],
-    shift_vector: Sequence[float] = [0, 0, 0],
-) -> list[float]:
+    llh: tuple[float, float, float],
+    shift_vector: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    *,
+    ellipsoid: isce3.core.Ellipsoid = isce3.core.WGS84_ELLIPSOID,
+) -> tuple[float, float, float]:
     """
     Given a position in LLH coordinates and an ENU vector by which that position is
     shifted, return an LLH that has been shifted by the ENU vector.
 
-    This estimation is expected to be inaccurate at the poles and at heights != 0 above
-    or below the ellipsoid.
+    This uses a flat Earth approximation and the estimation is expected to be inaccurate
+    at the poles and at heights != 0 above or below the ellipsoid.
     
     Algorithm
     ---------
@@ -465,18 +467,16 @@ def get_llh_with_shift(
 
     Parameters
     ----------
-    llh : Sequence[float]
-        The input LLH, in radians (lon, lat) and meters (height).
-    shift_vector : Sequence[float], optional
-        The ENU shift vector, in meters. Defaults to [0, 0, 0]
+    llh : tuple[float, float, float]
+        The input geodetic LLH, in radians (lon, lat) and meters (height).
+    shift_vector : tuple[float, float, float]
+        The ENU shift vector, in meters. Defaults to (0.0, 0.0, 0.0)
 
     Returns
     -------
-    list of 3 floats
+    float, float, float
         The longitude, latitude, and height of the shifted position.
     """
-    ellipsoid = isce3.core.Ellipsoid()
-
     h_0 = llh[2]
 
     if abs(h_0) >= 1:
@@ -507,13 +507,13 @@ def get_llh_with_shift(
     # portion of the ENU shift vector.
     h_1 = llh[2] + shift_vector[2]
 
-    return [lon_1, lat_1, h_1]
+    return (lon_1, lat_1, h_1)
 
 
 def check_cr_tectonic_estimation(
-    llh_rad: Sequence[float],
-    enu: Sequence[float],
-    rtol: float,
+    llh_rad: tuple[float, float, float],
+    enu: tuple[float, float, float],
+    atol: float,
 ) -> None:
     """
     Check the trigonometric and quaternion-based methods of estimating a shifted LLH
@@ -521,11 +521,11 @@ def check_cr_tectonic_estimation(
 
     Parameters
     ----------
-    llh_rad : Sequence[float]
+    llh_rad : tuple[float, float, float]
         The input LLH, in radians (lon, lat) and meters (height).
-    enu : Sequence[float]
+    enu : tuple[float, float, float]
         The ENU shift vector, in meters. Defaults to [0, 0, 0]
-    rtol : float
+    atol : float
         The tolerance of the check, in meters, between the ISCE3 estimate and the
         trigonometric estimate.
     """
@@ -557,9 +557,8 @@ def check_cr_tectonic_estimation(
     official_estimation = ellipsoid.lon_lat_to_xyz(llh_rad) + ecef_shift
     trigonometric_estimation = ellipsoid.lon_lat_to_xyz(loose_llh)
 
-    # this if statement would be removed for an actual test
     try:
-        assert np.linalg.norm(trigonometric_estimation - official_estimation) < rtol
+        assert np.linalg.norm(trigonometric_estimation - official_estimation) < atol
     except:
         print("TECTONIC ESTIMATION FAILED TOLERANCE CHECK.")
         print(
@@ -567,7 +566,7 @@ def check_cr_tectonic_estimation(
             f"{np.rad2deg(llh_rad[0])} deg, {np.rad2deg(llh_rad[1])} deg, {llh_rad[2]}m"
         )
         print(f"INPUT ENU: {enu}")
-        print(f"TOLERANCE: {rtol}m")
+        print(f"TOLERANCE: {atol}m")
         print(f"OFFICIAL ESTIMATE: {official_estimation}")
         print(f"TRIGONOMETRIC ESTIMATE: {trigonometric_estimation}")
         print(
@@ -577,34 +576,33 @@ def check_cr_tectonic_estimation(
         raise
 
 
+# XXX: The flat-earth estimation checked against is inaccurate at altitudes
+#      above and below the ellipsoid; always use ENU up value = 0.
 @mark.parametrize(
-    "enu,rtol",
+    "enu,atol",
     [
-        ([1, 0, 0], 5e-7),
-        ([-1, 0, 0], 5e-7),
-        ([0, 1, 0], 1e-7),
-        ([0, -1, 0], 1e-7),
-        ([1, 1, 0], 1.1e-6),
-        ([-1, -1, 0], 1.1e-6),
-        ([1, -1, 0], 1.1e-6),
-        ([-1, 1, 0], 1.1e-6),
+        ((1, 0, 0), 5e-7),
+        ((-1, 0, 0), 5e-7),
+        ((0, 1, 0), 1e-7),
+        ((0, -1, 0), 1e-7),
+        ((1, 1, 0), 1.1e-6),
+        ((-1, -1, 0), 1.1e-6),
+        ((1, -1, 0), 1.1e-6),
+        ((-1, 1, 0), 1.1e-6),
     ]
 )
-def test_ecef_shift(enu: Sequence[float], rtol: float):
+def test_ecef_shift(enu: Sequence[float], atol: float):
     # The longitude and latitude positions to test
-    lon_params = np.arange(-np.pi, np.pi, np.pi/180)
-    lat_params = np.arange(-np.deg2rad(80), np.deg2rad(80), np.pi/180)
+    lon_params = np.linspace(-np.pi, np.pi, num=361)
+    lat_params = np.linspace(-np.deg2rad(80), np.deg2rad(80), num=361)
 
     for i in range(len(lon_params)):
         for j in range(len(lat_params)):
 
-            # This LLH is defined by the position on the longitude and latitude grids
-            llh = [lon_params[i], lat_params[j], 0]
+            # This LLH is defined by the position on the longitude and latitude grids.
+            # XXX: The flat-earth estimation checked against is inaccurate at altitudes
+            #      above and below the ellipsoid; always use height = 0.
+            llh = (lon_params[i], lat_params[j], 0)
 
             # Test the shift methods
-            check_cr_tectonic_estimation(llh, enu, rtol=rtol)
-
-
-if __name__ == "__main__":
-    test_kaiser_win()
-    test_cosine_win()
+            check_cr_tectonic_estimation(llh, enu, atol=atol)

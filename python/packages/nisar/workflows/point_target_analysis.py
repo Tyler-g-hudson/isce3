@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import os
 import traceback
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterator, Union
@@ -216,11 +216,11 @@ def add_pta_args(
 
 
 def get_radar_grid_coords(
-    llh_deg: Sequence[float],
+    llh_deg: tuple[float, float, float],
     slc: RSLC,
     freq_group: str,
-    shift_vector: Sequence[float] | None = [0, 0, 0],
-):
+    shift_vector: tuple[float, float, float] = (0.0, 0.0, 0.0),
+) -> tuple[float, float]:
     """
     Perform geo2rdr conversion of longitude, latitude, and
     height-above-ellipsoid (LLH) coordinates to radar geometry, and return the
@@ -228,17 +228,15 @@ def get_radar_grid_coords(
 
     Parameters
     ------------
-    llh_deg : sequence of 3 floats
+    llh_deg : tuple[float, float, float]
         Corner reflector geodetic coordinates in lon (deg), lat (deg), and height (m).
-        Sequence length = 3
     slc : nisar.products.readers.RSLC
         NISAR RSLC HDF5 product data
     freq_group : str
        RSLC data file frequency selection 'A' or 'B'
-    shift_vector : sequence of 3 floats, or None
-        Corner reflector displacement offset in ENU coordinate system, or None if no
-        shift is to be applied.
-        Defaults to None.
+    shift_vector : tuple[float, float, float]
+        Corner reflector displacement offset in ENU coordinate system, in meters.
+        Defaults to (0, 0, 0).
 
     Returns
     --------
@@ -247,10 +245,7 @@ def get_radar_grid_coords(
     line: float
         Point target azimuth time bin location
     """
-    if len(llh_deg) != 3:
-        raise ValueError("llh_deg must be a sequence of length 3.")
-
-    llh = np.array([np.deg2rad(llh_deg[0]), np.deg2rad(llh_deg[1]), llh_deg[2]])
+    llh = (np.deg2rad(llh_deg[0]), np.deg2rad(llh_deg[1]), llh_deg[2])
 
     ecef_shift = pti.get_ecef_shift(llh=llh, shift_vector=shift_vector)
 
@@ -551,7 +546,8 @@ def get_tectonic_displacement(
     -------
     np.ndarray
         The displacement of the corner reflector in the time between the last survey
-        and the observation.
+        and the observation, in meters, in an ENU coordinate system with its origin at
+        the surveyed corner reflector position.
     """
     velocity = cr.velocity
     survey_date = cr.survey_date
@@ -804,11 +800,11 @@ def analyze_corner_reflectors(
     # coordinates.
     def get_point_target_info(
         target_llh: isce3.core.LLH,
-        displacement: Sequence[float] | None,
+        displacement: tuple[float, float, float],
     ) -> dict[str, Any]:
         # Convert lon & lat to degrees.
         lon, lat, height = target_llh.to_vec3()
-        llh_deg = np.asarray([np.rad2deg(lon), np.rad2deg(lat), height])
+        llh_deg = (np.rad2deg(lon), np.rad2deg(lat), height)
 
         # Get pixel-space coordinates of the target within the image grid.
         col, row = get_radar_grid_coords(llh_deg, rslc, freq, shift_vector=displacement)
@@ -837,6 +833,9 @@ def analyze_corner_reflectors(
     results = []
     for cr in corner_reflectors:
         if isinstance(cr, nisar.cal.CornerReflector) and tectonic_correction:
+            # Assume that the displacement due to plate motion during radar observation
+            # is negligible so we can just use the start datetime of the observation
+            # instead of computing the azimuth time of each corner reflector here.
             observation_datetime = (
                 orbit.reference_epoch
                 + isce3.core.TimeDelta(rslc.getZeroDopplerTime()[0])
@@ -846,7 +845,7 @@ def analyze_corner_reflectors(
                 observation_datetime=observation_datetime, cr=cr
             )
         else:
-            displacement = None
+            displacement = (0.0, 0.0, 0.0)
 
         try:
             cr_info = get_point_target_info(cr.llh, displacement=displacement)
