@@ -16,7 +16,7 @@ from isce3.image.v2 import resample_to_coords
 from isce3.io.dataset import DatasetReader
 from isce3.product import RadarGridParameters
 
-from .corner_reflector import enu_to_ecef_rotation
+from isce3.geometry import enu_to_ecef_rotation
 
 desc = __doc__
 
