@@ -571,7 +571,7 @@ def analyze_corner_reflectors(
     fs_bw_ratio: float = 1.2,
     window_type: str = "rect",
     window_parameter: float = 0.0,
-    tectonic_correction: bool = False,
+    tectonic_correction: bool = True,
     cuts: bool = False,
 ) -> list[dict[str, Any]]:
     r"""
@@ -663,7 +663,7 @@ def analyze_corner_reflectors(
     tectonic_correction : bool, optional
         If True, apply a correction to the expected locations of the corner reflectors
         based on their tectonic velocity between the survey date and observation date.
-        Defaults to False.
+        Defaults to True.
     cuts : bool, optional
         Whether to include range & azimuth cuts through the peak in the results.
         Defaults to False.
@@ -782,7 +782,7 @@ def analyze_corner_reflectors(
     Notes
     -----
     No corrections to the corner reflector position are applied for solid earth tides,
-    etc.
+    ionosphere/troposphere delay, etc.
 
     References
     ----------
@@ -836,10 +836,7 @@ def analyze_corner_reflectors(
             # Assume that the displacement due to plate motion during radar observation
             # is negligible so we can just use the start datetime of the observation
             # instead of computing the azimuth time of each corner reflector here.
-            observation_datetime = (
-                orbit.reference_epoch
-                + isce3.core.TimeDelta(rslc.getZeroDopplerTime()[0])
-            )
+            observation_datetime = rslc.getRadarGrid(freq).sensing_datetime()
 
             displacement = get_tectonic_displacement(
                 observation_datetime=observation_datetime, cr=cr
@@ -959,7 +956,7 @@ def process_corner_reflector_csv(
     window_type: str,
     window_parameter: float,
     cuts: bool,
-    tectonic_correction: bool = False,
+    tectonic_correction: bool = True,
 ) -> None:
     """
     Run point target analysis on corner reflectors from a CSV file.
@@ -1052,7 +1049,7 @@ def process_corner_reflector_csv(
         If True, apply a correction to the expected locations of the corner reflectors
         based on their tectonic velocity between the survey date and observation date.
         No tectonic correction will be applied regardless of this variable if the input
-        CSV file is in UAVSAR format. Defaults to False.
+        CSV file is in UAVSAR format. Defaults to True.
     """
     # Read input RSLC product.
     rslc_hdf5 = os.fspath(rslc_hdf5)

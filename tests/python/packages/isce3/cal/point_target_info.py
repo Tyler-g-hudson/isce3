@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -581,17 +582,17 @@ def check_cr_tectonic_estimation(
 @mark.parametrize(
     "enu,atol",
     [
-        ((1, 0, 0), 5e-7),
-        ((-1, 0, 0), 5e-7),
-        ((0, 1, 0), 1e-7),
-        ((0, -1, 0), 1e-7),
-        ((1, 1, 0), 1.1e-6),
-        ((-1, -1, 0), 1.1e-6),
-        ((1, -1, 0), 1.1e-6),
-        ((-1, 1, 0), 1.1e-6),
+        ((1, 0, 0), 1e-6),
+        ((-1, 0, 0), 1e-6),
+        ((0, 1, 0), 1e-6),
+        ((0, -1, 0), 1e-6),
+        ((1, 1, 0), 1e-6),
+        ((-1, -1, 0), 1e-6),
+        ((1, -1, 0), 1e-6),
+        ((-1, 1, 0), 1e-6),
     ]
 )
-def test_ecef_shift(enu: Sequence[float], atol: float):
+def test_ecef_shift(enu: Sequence[float], atol: float = 1e-6):
     # The longitude and latitude positions to test
     lon_params = np.linspace(-np.pi, np.pi, num=361)
     lat_params = np.linspace(-np.deg2rad(80), np.deg2rad(80), num=361)
@@ -606,3 +607,42 @@ def test_ecef_shift(enu: Sequence[float], atol: float):
 
             # Test the shift methods
             check_cr_tectonic_estimation(llh, enu, atol=atol)
+
+
+# XXX: The flat-earth estimation checked against is inaccurate at altitudes
+#      above and below the ellipsoid; always use ENU up value = 0.
+@mark.parametrize("height_diff", [1.0, -1.0])
+def test_ecef_shift_vertical(height_diff: float, atol: float = 0.01):
+    # The longitude and latitude positions to test
+    lon_params = np.linspace(-np.pi, np.pi, num=361)
+    lat_params = np.linspace(-np.deg2rad(80), np.deg2rad(80), num=361)
+
+    enu = (0, 0, height_diff)
+
+    for i in range(len(lon_params)):
+        for j in range(len(lat_params)):
+
+            # This LLH is defined by the position on the longitude and latitude grids.
+            # XXX: The flat-earth estimation checked against is inaccurate at altitudes
+            #      above and below the ellipsoid; always use height = 0.
+            llh = (lon_params[i], lat_params[j], 0)
+
+            ellipsoid = isce3.core.Ellipsoid()
+
+            ecef_shift = get_ecef_shift(llh=llh, shift_vector=enu)
+            official_ecef = ellipsoid.lon_lat_to_xyz(llh)
+            official_ecef_shifted = official_ecef + ecef_shift
+            ecef_radius = math.dist((0, 0, 0), official_ecef)
+            ecef_radius_shifted = math.dist((0, 0, 0), official_ecef_shifted)
+
+            height_change = ecef_radius_shifted - ecef_radius
+
+            discrepancy = abs(height_change - height_diff) > atol
+
+            if discrepancy:
+                raise ValueError(
+                    f"ENU shift vector with vertical change of {height_diff} meters: "
+                    "Resulting ECEF shift vector height change was off by "
+                    f"{discrepancy} meters."
+                )
+

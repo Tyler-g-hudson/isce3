@@ -36,22 +36,23 @@ def get_ecef_shift(
     shift_vector: tuple[float, float, float],
 ) -> tuple[float, float, float]:
     """
-    Given an LLH vector and ENU vector, return the ECEF representation of the ENU
-    vector relative to the given LLH location.
+    Transform a vector in ENU coordinates relative to some LLH origin to ECEF
+    coordinates.
 
     Parameters
     ----------
     llh : tuple[float, float, float]
         The input LLH - three floats in lon (in radians), lat (in radians),
         height (in meters above the reference ellipsoid).
-    shift_vector : tuple[float, float, float]
+    shift_vector : tuple[float, float, float], optional
         The ENU vector that the LLH is to be shifted by, in meters.
+        If None, the point (0, 0, 0) is returned.
 
     Returns
     -------
     float, float, float
-        The ECEF representation of `shift_vector` relative to `llh` as a tuple of
-        (x, y, z) coordinates, in meters.
+        The ECEF representation of `shift_vector` as a tuple of (x, y, z) coordinates,
+        in meters.
 
     Raises
     ------
@@ -59,7 +60,7 @@ def get_ecef_shift(
         If `shift_vector` or `llh` are given as a sequence with a length not equal to 3.
     """
     if shift_vector is None:
-        return (0, 0, 0)
+        return (0.0, 0.0, 0.0)
 
     if len(llh) != 3:
         raise ValueError("llh must be a sequence of length 3.")
@@ -68,9 +69,9 @@ def get_ecef_shift(
         raise ValueError("shift_vector must be a sequence of length 3 or None.")
 
     shift_quat = enu_to_ecef_rotation(llh[0], llh[1])
-    rotation = shift_quat.rotate(shift_vector)
+    shift_vector_ecef = shift_quat.rotate(shift_vector)
 
-    return (rotation[0], rotation[1], rotation[2])
+    return (shift_vector_ecef[0], shift_vector_ecef[1], shift_vector_ecef[2])
 
 
 def get_chip(x: DatasetReader, i: float, j: float, nchip: int = 64) -> np.ndarray:
