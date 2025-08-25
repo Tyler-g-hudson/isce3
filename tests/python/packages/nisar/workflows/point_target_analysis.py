@@ -105,6 +105,7 @@ def test_nisar_csv():
             window_type="rect",
             window_parameter=0.0,
             cuts=True,
+            tectonic_correction=False,
         )
 
         # Read JSON output.
@@ -217,6 +218,7 @@ def test_uavsar_csv():
             window_type="kaiser",
             window_parameter=1.6,
             cuts=False,
+            tectonic_correction=False,
         )
 
         # Read JSON output.

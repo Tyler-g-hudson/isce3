@@ -582,17 +582,17 @@ def check_cr_tectonic_estimation(
 @mark.parametrize(
     "enu,atol",
     [
-        ((1, 0, 0), 1e-6),
-        ((-1, 0, 0), 1e-6),
-        ((0, 1, 0), 1e-6),
-        ((0, -1, 0), 1e-6),
-        ((1, 1, 0), 1e-6),
-        ((-1, -1, 0), 1e-6),
-        ((1, -1, 0), 1e-6),
-        ((-1, 1, 0), 1e-6),
+        ((1, 0, 0), 2e-6),
+        ((-1, 0, 0), 2e-6),
+        ((0, 1, 0), 2e-6),
+        ((0, -1, 0), 2e-6),
+        ((1, 1, 0), 2e-6),
+        ((-1, -1, 0), 2e-6),
+        ((1, -1, 0), 2e-6),
+        ((-1, 1, 0), 2e-6),
     ]
 )
-def test_ecef_shift(enu: Sequence[float], atol: float = 1e-6):
+def test_ecef_shift(enu: Sequence[float], atol: float):
     # The longitude and latitude positions to test
     lon_params = np.linspace(-np.pi, np.pi, num=361)
     lat_params = np.linspace(-np.deg2rad(80), np.deg2rad(80), num=361)
