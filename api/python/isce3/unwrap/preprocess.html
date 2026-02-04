@@ -64,6 +64,9 @@
             <li>
                     <a class="function" href="#project_map_to_radar">project_map_to_radar</a>
             </li>
+            <li>
+                    <a class="function" href="#interpret_subswath_mask">interpret_subswath_mask</a>
+            </li>
     </ul>
 
 
@@ -463,6 +466,51 @@
 </span><span id="L-376"><a href="#L-376"><span class="linenos">376</span></a>
 </span><span id="L-377"><a href="#L-377"><span class="linenos">377</span></a>    <span class="c1"># stack to make whole then return</span>
 </span><span id="L-378"><a href="#L-378"><span class="linenos">378</span></a>    <span class="k">return</span> <span class="n">output_arrays</span>
+</span><span id="L-379"><a href="#L-379"><span class="linenos">379</span></a>
+</span><span id="L-380"><a href="#L-380"><span class="linenos">380</span></a>
+</span><span id="L-381"><a href="#L-381"><span class="linenos">381</span></a><span class="k">def</span><span class="w"> </span><span class="nf">interpret_subswath_mask</span><span class="p">(</span><span class="n">subswath_mask</span><span class="p">,</span> <span class="n">nodata</span><span class="o">=</span><span class="mi">255</span><span class="p">):</span>
+</span><span id="L-382"><a href="#L-382"><span class="linenos">382</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+</span><span id="L-383"><a href="#L-383"><span class="linenos">383</span></a><span class="sd">    Interprets a subswath mask integer by decoding its digits into boolean </span>
+</span><span id="L-384"><a href="#L-384"><span class="linenos">384</span></a><span class="sd">    flags indicating reference validity, secondary validity, and water</span>
+</span><span id="L-385"><a href="#L-385"><span class="linenos">385</span></a><span class="sd">    presence.</span>
+</span><span id="L-386"><a href="#L-386"><span class="linenos">386</span></a>
+</span><span id="L-387"><a href="#L-387"><span class="linenos">387</span></a><span class="sd">    Parameters</span>
+</span><span id="L-388"><a href="#L-388"><span class="linenos">388</span></a><span class="sd">    ----------</span>
+</span><span id="L-389"><a href="#L-389"><span class="linenos">389</span></a><span class="sd">    subswath_mask : numpy.array</span>
+</span><span id="L-390"><a href="#L-390"><span class="linenos">390</span></a><span class="sd">        Each digit represents a specific flag:</span>
+</span><span id="L-391"><a href="#L-391"><span class="linenos">391</span></a><span class="sd">        - Units digit (1s place): Secondary subswath mask</span>
+</span><span id="L-392"><a href="#L-392"><span class="linenos">392</span></a><span class="sd">            Non-zero indicates valid; zero indicates invalid.</span>
+</span><span id="L-393"><a href="#L-393"><span class="linenos">393</span></a><span class="sd">        - Tens digit (10s place): Reference subswath mask</span>
+</span><span id="L-394"><a href="#L-394"><span class="linenos">394</span></a><span class="sd">            Non-zero indicates valid; zero indicates invalid.</span>
+</span><span id="L-395"><a href="#L-395"><span class="linenos">395</span></a><span class="sd">        - Hundreds digit (100s place): Water presence flag.</span>
+</span><span id="L-396"><a href="#L-396"><span class="linenos">396</span></a><span class="sd">            Non-zero indicates presence of water; zero indicates absence.</span>
+</span><span id="L-397"><a href="#L-397"><span class="linenos">397</span></a><span class="sd">    nodata : int, default 255</span>
+</span><span id="L-398"><a href="#L-398"><span class="linenos">398</span></a>
+</span><span id="L-399"><a href="#L-399"><span class="linenos">399</span></a><span class="sd">    Returns</span>
+</span><span id="L-400"><a href="#L-400"><span class="linenos">400</span></a><span class="sd">    -------</span>
+</span><span id="L-401"><a href="#L-401"><span class="linenos">401</span></a><span class="sd">    reference_valid : bool</span>
+</span><span id="L-402"><a href="#L-402"><span class="linenos">402</span></a><span class="sd">        True if the reference is valid (tens digit is non-zero),</span>
+</span><span id="L-403"><a href="#L-403"><span class="linenos">403</span></a><span class="sd">        False otherwise.</span>
+</span><span id="L-404"><a href="#L-404"><span class="linenos">404</span></a><span class="sd">    secondary_valid : bool</span>
+</span><span id="L-405"><a href="#L-405"><span class="linenos">405</span></a><span class="sd">        True if the secondary is valid (units digit is non-zero),</span>
+</span><span id="L-406"><a href="#L-406"><span class="linenos">406</span></a><span class="sd">        False otherwise.</span>
+</span><span id="L-407"><a href="#L-407"><span class="linenos">407</span></a><span class="sd">    water : bool</span>
+</span><span id="L-408"><a href="#L-408"><span class="linenos">408</span></a><span class="sd">        True if water is present (hundreds digit is non-zero),</span>
+</span><span id="L-409"><a href="#L-409"><span class="linenos">409</span></a><span class="sd">        False otherwise.</span>
+</span><span id="L-410"><a href="#L-410"><span class="linenos">410</span></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="L-411"><a href="#L-411"><span class="linenos">411</span></a>    <span class="n">arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">subswath_mask</span><span class="p">)</span>
+</span><span id="L-412"><a href="#L-412"><span class="linenos">412</span></a>
+</span><span id="L-413"><a href="#L-413"><span class="linenos">413</span></a>    <span class="n">nd</span> <span class="o">=</span> <span class="p">(</span><span class="n">arr</span> <span class="o">==</span> <span class="n">nodata</span><span class="p">)</span>
+</span><span id="L-414"><a href="#L-414"><span class="linenos">414</span></a>
+</span><span id="L-415"><a href="#L-415"><span class="linenos">415</span></a>    <span class="n">secondary_valid</span> <span class="o">=</span> <span class="n">subswath_mask</span> <span class="o">%</span> <span class="mi">10</span> <span class="o">!=</span> <span class="mi">0</span>
+</span><span id="L-416"><a href="#L-416"><span class="linenos">416</span></a>    <span class="n">reference_valid</span> <span class="o">=</span> <span class="p">(</span><span class="n">subswath_mask</span> <span class="o">//</span> <span class="mi">10</span><span class="p">)</span> <span class="o">%</span> <span class="mi">10</span> <span class="o">!=</span> <span class="mi">0</span>
+</span><span id="L-417"><a href="#L-417"><span class="linenos">417</span></a>    <span class="n">water</span> <span class="o">=</span> <span class="p">(</span><span class="n">subswath_mask</span> <span class="o">//</span> <span class="mi">100</span><span class="p">)</span> <span class="o">%</span> <span class="mi">10</span> <span class="o">!=</span> <span class="mi">0</span>
+</span><span id="L-418"><a href="#L-418"><span class="linenos">418</span></a>
+</span><span id="L-419"><a href="#L-419"><span class="linenos">419</span></a>    <span class="n">secondary_valid</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">nd</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="n">secondary_valid</span><span class="p">)</span>
+</span><span id="L-420"><a href="#L-420"><span class="linenos">420</span></a>    <span class="n">reference_valid</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">nd</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="n">reference_valid</span><span class="p">)</span>
+</span><span id="L-421"><a href="#L-421"><span class="linenos">421</span></a>    <span class="n">water</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">nd</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="n">water</span><span class="p">)</span>
+</span><span id="L-422"><a href="#L-422"><span class="linenos">422</span></a>
+</span><span id="L-423"><a href="#L-423"><span class="linenos">423</span></a>    <span class="k">return</span> <span class="n">reference_valid</span><span class="p">,</span> <span class="n">secondary_valid</span><span class="p">,</span> <span class="n">water</span>
 </span></pre></div>
 
 
@@ -936,6 +984,94 @@ freq: str
 
 <p>rdr_data: numpy.ndarray
     projected data into radar grid  absolute</p>
+</div>
+
+
+                </section>
+                <section id="interpret_subswath_mask">
+                            <input id="interpret_subswath_mask-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+<div class="attr function">
+            
+        <span class="def">def</span>
+        <span class="name">interpret_subswath_mask</span><span class="signature pdoc-code condensed">(<span class="param"><span class="n">subswath_mask</span>, </span><span class="param"><span class="n">nodata</span><span class="o">=</span><span class="mi">255</span></span><span class="return-annotation">):</span></span>
+
+                <label class="view-source-button" for="interpret_subswath_mask-view-source"><span>View Source</span></label>
+
+    </div>
+    <a class="headerlink" href="#interpret_subswath_mask"></a>
+            <div class="pdoc-code codehilite"><pre><span></span><span id="interpret_subswath_mask-382"><a href="#interpret_subswath_mask-382"><span class="linenos">382</span></a><span class="k">def</span><span class="w"> </span><span class="nf">interpret_subswath_mask</span><span class="p">(</span><span class="n">subswath_mask</span><span class="p">,</span> <span class="n">nodata</span><span class="o">=</span><span class="mi">255</span><span class="p">):</span>
+</span><span id="interpret_subswath_mask-383"><a href="#interpret_subswath_mask-383"><span class="linenos">383</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+</span><span id="interpret_subswath_mask-384"><a href="#interpret_subswath_mask-384"><span class="linenos">384</span></a><span class="sd">    Interprets a subswath mask integer by decoding its digits into boolean </span>
+</span><span id="interpret_subswath_mask-385"><a href="#interpret_subswath_mask-385"><span class="linenos">385</span></a><span class="sd">    flags indicating reference validity, secondary validity, and water</span>
+</span><span id="interpret_subswath_mask-386"><a href="#interpret_subswath_mask-386"><span class="linenos">386</span></a><span class="sd">    presence.</span>
+</span><span id="interpret_subswath_mask-387"><a href="#interpret_subswath_mask-387"><span class="linenos">387</span></a>
+</span><span id="interpret_subswath_mask-388"><a href="#interpret_subswath_mask-388"><span class="linenos">388</span></a><span class="sd">    Parameters</span>
+</span><span id="interpret_subswath_mask-389"><a href="#interpret_subswath_mask-389"><span class="linenos">389</span></a><span class="sd">    ----------</span>
+</span><span id="interpret_subswath_mask-390"><a href="#interpret_subswath_mask-390"><span class="linenos">390</span></a><span class="sd">    subswath_mask : numpy.array</span>
+</span><span id="interpret_subswath_mask-391"><a href="#interpret_subswath_mask-391"><span class="linenos">391</span></a><span class="sd">        Each digit represents a specific flag:</span>
+</span><span id="interpret_subswath_mask-392"><a href="#interpret_subswath_mask-392"><span class="linenos">392</span></a><span class="sd">        - Units digit (1s place): Secondary subswath mask</span>
+</span><span id="interpret_subswath_mask-393"><a href="#interpret_subswath_mask-393"><span class="linenos">393</span></a><span class="sd">            Non-zero indicates valid; zero indicates invalid.</span>
+</span><span id="interpret_subswath_mask-394"><a href="#interpret_subswath_mask-394"><span class="linenos">394</span></a><span class="sd">        - Tens digit (10s place): Reference subswath mask</span>
+</span><span id="interpret_subswath_mask-395"><a href="#interpret_subswath_mask-395"><span class="linenos">395</span></a><span class="sd">            Non-zero indicates valid; zero indicates invalid.</span>
+</span><span id="interpret_subswath_mask-396"><a href="#interpret_subswath_mask-396"><span class="linenos">396</span></a><span class="sd">        - Hundreds digit (100s place): Water presence flag.</span>
+</span><span id="interpret_subswath_mask-397"><a href="#interpret_subswath_mask-397"><span class="linenos">397</span></a><span class="sd">            Non-zero indicates presence of water; zero indicates absence.</span>
+</span><span id="interpret_subswath_mask-398"><a href="#interpret_subswath_mask-398"><span class="linenos">398</span></a><span class="sd">    nodata : int, default 255</span>
+</span><span id="interpret_subswath_mask-399"><a href="#interpret_subswath_mask-399"><span class="linenos">399</span></a>
+</span><span id="interpret_subswath_mask-400"><a href="#interpret_subswath_mask-400"><span class="linenos">400</span></a><span class="sd">    Returns</span>
+</span><span id="interpret_subswath_mask-401"><a href="#interpret_subswath_mask-401"><span class="linenos">401</span></a><span class="sd">    -------</span>
+</span><span id="interpret_subswath_mask-402"><a href="#interpret_subswath_mask-402"><span class="linenos">402</span></a><span class="sd">    reference_valid : bool</span>
+</span><span id="interpret_subswath_mask-403"><a href="#interpret_subswath_mask-403"><span class="linenos">403</span></a><span class="sd">        True if the reference is valid (tens digit is non-zero),</span>
+</span><span id="interpret_subswath_mask-404"><a href="#interpret_subswath_mask-404"><span class="linenos">404</span></a><span class="sd">        False otherwise.</span>
+</span><span id="interpret_subswath_mask-405"><a href="#interpret_subswath_mask-405"><span class="linenos">405</span></a><span class="sd">    secondary_valid : bool</span>
+</span><span id="interpret_subswath_mask-406"><a href="#interpret_subswath_mask-406"><span class="linenos">406</span></a><span class="sd">        True if the secondary is valid (units digit is non-zero),</span>
+</span><span id="interpret_subswath_mask-407"><a href="#interpret_subswath_mask-407"><span class="linenos">407</span></a><span class="sd">        False otherwise.</span>
+</span><span id="interpret_subswath_mask-408"><a href="#interpret_subswath_mask-408"><span class="linenos">408</span></a><span class="sd">    water : bool</span>
+</span><span id="interpret_subswath_mask-409"><a href="#interpret_subswath_mask-409"><span class="linenos">409</span></a><span class="sd">        True if water is present (hundreds digit is non-zero),</span>
+</span><span id="interpret_subswath_mask-410"><a href="#interpret_subswath_mask-410"><span class="linenos">410</span></a><span class="sd">        False otherwise.</span>
+</span><span id="interpret_subswath_mask-411"><a href="#interpret_subswath_mask-411"><span class="linenos">411</span></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="interpret_subswath_mask-412"><a href="#interpret_subswath_mask-412"><span class="linenos">412</span></a>    <span class="n">arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">subswath_mask</span><span class="p">)</span>
+</span><span id="interpret_subswath_mask-413"><a href="#interpret_subswath_mask-413"><span class="linenos">413</span></a>
+</span><span id="interpret_subswath_mask-414"><a href="#interpret_subswath_mask-414"><span class="linenos">414</span></a>    <span class="n">nd</span> <span class="o">=</span> <span class="p">(</span><span class="n">arr</span> <span class="o">==</span> <span class="n">nodata</span><span class="p">)</span>
+</span><span id="interpret_subswath_mask-415"><a href="#interpret_subswath_mask-415"><span class="linenos">415</span></a>
+</span><span id="interpret_subswath_mask-416"><a href="#interpret_subswath_mask-416"><span class="linenos">416</span></a>    <span class="n">secondary_valid</span> <span class="o">=</span> <span class="n">subswath_mask</span> <span class="o">%</span> <span class="mi">10</span> <span class="o">!=</span> <span class="mi">0</span>
+</span><span id="interpret_subswath_mask-417"><a href="#interpret_subswath_mask-417"><span class="linenos">417</span></a>    <span class="n">reference_valid</span> <span class="o">=</span> <span class="p">(</span><span class="n">subswath_mask</span> <span class="o">//</span> <span class="mi">10</span><span class="p">)</span> <span class="o">%</span> <span class="mi">10</span> <span class="o">!=</span> <span class="mi">0</span>
+</span><span id="interpret_subswath_mask-418"><a href="#interpret_subswath_mask-418"><span class="linenos">418</span></a>    <span class="n">water</span> <span class="o">=</span> <span class="p">(</span><span class="n">subswath_mask</span> <span class="o">//</span> <span class="mi">100</span><span class="p">)</span> <span class="o">%</span> <span class="mi">10</span> <span class="o">!=</span> <span class="mi">0</span>
+</span><span id="interpret_subswath_mask-419"><a href="#interpret_subswath_mask-419"><span class="linenos">419</span></a>
+</span><span id="interpret_subswath_mask-420"><a href="#interpret_subswath_mask-420"><span class="linenos">420</span></a>    <span class="n">secondary_valid</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">nd</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="n">secondary_valid</span><span class="p">)</span>
+</span><span id="interpret_subswath_mask-421"><a href="#interpret_subswath_mask-421"><span class="linenos">421</span></a>    <span class="n">reference_valid</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">nd</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="n">reference_valid</span><span class="p">)</span>
+</span><span id="interpret_subswath_mask-422"><a href="#interpret_subswath_mask-422"><span class="linenos">422</span></a>    <span class="n">water</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">nd</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="n">water</span><span class="p">)</span>
+</span><span id="interpret_subswath_mask-423"><a href="#interpret_subswath_mask-423"><span class="linenos">423</span></a>
+</span><span id="interpret_subswath_mask-424"><a href="#interpret_subswath_mask-424"><span class="linenos">424</span></a>    <span class="k">return</span> <span class="n">reference_valid</span><span class="p">,</span> <span class="n">secondary_valid</span><span class="p">,</span> <span class="n">water</span>
+</span></pre></div>
+
+
+            <div class="docstring"><p>Interprets a subswath mask integer by decoding its digits into boolean 
+flags indicating reference validity, secondary validity, and water
+presence.</p>
+
+<h2 id="parameters">Parameters</h2>
+
+<p>subswath_mask : numpy.array
+    Each digit represents a specific flag:
+    - Units digit (1s place): Secondary subswath mask
+        Non-zero indicates valid; zero indicates invalid.
+    - Tens digit (10s place): Reference subswath mask
+        Non-zero indicates valid; zero indicates invalid.
+    - Hundreds digit (100s place): Water presence flag.
+        Non-zero indicates presence of water; zero indicates absence.
+nodata : int, default 255</p>
+
+<h2 id="returns">Returns</h2>
+
+<p>reference_valid : bool
+    True if the reference is valid (tens digit is non-zero),
+    False otherwise.
+secondary_valid : bool
+    True if the secondary is valid (units digit is non-zero),
+    False otherwise.
+water : bool
+    True if water is present (hundreds digit is non-zero),
+    False otherwise.</p>
 </div>
 
 
