@@ -9,6 +9,7 @@ import time
 from enum import Enum
 
 import isce3
+import h5py
 import journal
 import numpy as np
 from isce3.core import crop_external_orbit
@@ -278,19 +279,20 @@ def _snake_to_camel_case(snake_case_str):
     return (splitted_snake_case_str[0] +
             ''.join(w.title() for w in splitted_snake_case_str[1:]))
 
-def get_raster_lists(all_geocoded_dataset_flags,
-                     desired_geo_dataset_names,
-                     freq,
-                     pol_list,
-                     input_hdf5,
-                     dst_h5,
-                     offset_params=None,
-                     scratch_path='',
-                     input_product_type=InputProduct.RUNW,
-                     iono_sideband=False,
-                     is_runw_offset_product=False,
-                     possible_interp_methods=None,
-                     possible_invalid_values=None):
+def get_raster_lists(
+    all_geocoded_dataset_flags,
+    desired_geo_dataset_names,
+    freq,
+    pol_list,
+    input_hdf5,
+    dst_h5,
+    offset_params=None,
+    input_product_type=InputProduct.RUNW,
+    iono_sideband=False,
+    is_runw_offset_product=False,
+    possible_interp_methods=None,
+    possible_invalid_values=None
+):
     '''
     Get list of isce3.io.rasters to geocode to, corresponding h5py.Datasets,
     input isce3.io.Rasters, interpolation methods, and invalid values based on
@@ -488,19 +490,41 @@ def get_raster_lists(all_geocoded_dataset_flags,
     return (geocoded_rasters, geocoded_datasets, input_rasters, interp_methods,
             invalid_values)
 
-def cpu_geocode_rasters(cpu_geo_obj, geo_datasets, desired, freq, pol_list,
-                        input_hdf5, dst_h5, radar_grid, dem_raster,
-                        block_size, offset_params=None, scratch_path='',
-                        compute_stats=True, input_product_type = InputProduct.RUNW,
-                        iono_sideband=False, is_runw_offset_product=False,
-                        az_correction=isce3.core.LUT2d(),
-                        srg_correction=isce3.core.LUT2d(),
-                        subswaths=None):
+def cpu_geocode_rasters(
+    cpu_geo_obj,
+    geo_datasets: dict[str, bool],
+    desired: list[str],
+    freq: str,
+    pol_list: list[str],
+    input_hdf5: str,
+    dst_h5: h5py.File,
+    radar_grid: isce3.product.RadarGridParameters,
+    dem_raster: isce3.io.Raster,
+    block_size: int,
+    offset_params = None,
+    compute_stats: bool = True,
+    input_product_type: InputProduct = InputProduct.RUNW,
+    iono_sideband: bool = False,
+    is_runw_offset_product: bool = False,
+    az_correction: isce3.core.LUT2d = isce3.core.LUT2d(),
+    srg_correction: isce3.core.LUT2d = isce3.core.LUT2d(),
+    subswaths: isce3.product.SubSwaths = None,
+    az_baseband_doppler: bool = False,
+):
 
     geocoded_rasters, geocoded_datasets, input_rasters, *_ = \
-        get_raster_lists(geo_datasets, desired, freq, pol_list, input_hdf5,
-                         dst_h5, offset_params, scratch_path, input_product_type,
-                         iono_sideband, is_runw_offset_product)
+        get_raster_lists(
+            all_geocoded_dataset_flags=geo_datasets,
+            desired_geo_dataset_names=desired,
+            freq=freq,
+            pol_list=pol_list,
+            input_hdf5=input_hdf5,
+            dst_h5=dst_h5,
+            offset_params=offset_params,
+            input_product_type=input_product_type,
+            iono_sideband=iono_sideband,
+            is_runw_offset_product=is_runw_offset_product,
+        )
 
     if input_rasters:
         geocode_tuples = zip(input_rasters, geocoded_rasters)
@@ -516,7 +540,9 @@ def cpu_geocode_rasters(cpu_geo_obj, geo_datasets, desired, freq, pol_list,
                 az_time_correction=az_correction,
                 slant_range_correction=srg_correction,
                 apply_valid_samples_sub_swath_masking=False,
-                sub_swaths=subswaths)
+                sub_swaths=subswaths,
+                flag_az_baseband_doppler=az_baseband_doppler,
+            )
 
         if compute_stats:
             for raster, ds in zip(geocoded_rasters, geocoded_datasets):
@@ -585,6 +611,7 @@ def cpu_run(cfg, input_hdf5, output_hdf5, input_product_type=InputProduct.RUNW):
 
     # NISAR products are always zero doppler
     grid_zero_doppler = isce3.core.LUT2d()
+    native_doppler = slc.getDopplerCentroid()
 
     # set defaults shared by both frequencies
     dem_raster = isce3.io.Raster(dem_file)
@@ -614,6 +641,7 @@ def cpu_run(cfg, input_hdf5, output_hdf5, input_product_type=InputProduct.RUNW):
     geocode_cplx_obj.orbit = orbit
     geocode_cplx_obj.ellipsoid = ellipsoid
     geocode_cplx_obj.doppler = grid_zero_doppler
+    geocode_cplx_obj.native_doppler = native_doppler
     geocode_cplx_obj.threshold_geo2rdr = threshold_geo2rdr
     geocode_cplx_obj.numiter_geo2rdr = iteration_geo2rdr
     geocode_cplx_obj.data_interpolator = interp_method
@@ -716,7 +744,6 @@ def cpu_run(cfg, input_hdf5, output_hdf5, input_product_type=InputProduct.RUNW):
                 cpu_geocode_rasters(geocode_obj, geo_datasets, desired, freq,
                                     pol_list, input_hdf5, dst_h5,
                                     radar_grid, dem_raster, block_size,
-                                    scratch_path=scratch_path,
                                     compute_stats=False,
                                     az_correction=az_correction,
                                     srg_correction=srg_correction)
@@ -738,7 +765,6 @@ def cpu_run(cfg, input_hdf5, output_hdf5, input_product_type=InputProduct.RUNW):
                 cpu_geocode_rasters(geocode_obj, geo_datasets, desired, freq,
                                     pol_list, input_hdf5, dst_h5,
                                     radar_grid_offset, dem_raster, block_size,
-                                    scratch_path=scratch_path,
                                     compute_stats=False,
                                     is_runw_offset_product=True,
                                     az_correction=az_correction,
@@ -804,12 +830,16 @@ def cpu_run(cfg, input_hdf5, output_hdf5, input_product_type=InputProduct.RUNW):
                 desired = ['wrapped_interferogram']
                 geocode_cplx_obj.data_interpolator = cfg["processing"]["geocode"]\
                         ['wrapped_interferogram']['interp_method']
-                cpu_geocode_rasters(geocode_cplx_obj, geo_datasets, desired, freq,
-                                    pol_list,input_hdf5, dst_h5, radar_grid,
-                                    dem_raster, block_size * 2,
-                                    input_product_type=InputProduct.RIFG,
-                                    az_correction=az_correction,
-                                    srg_correction=srg_correction)
+                cpu_geocode_rasters(
+                    cpu_geo_obj=geocode_cplx_obj, geo_datasets=geo_datasets,
+                    desired=desired, freq=freq, pol_list=pol_list,
+                    input_hdf5=input_hdf5, dst_h5=dst_h5, radar_grid=radar_grid,
+                    dem_raster=dem_raster, block_size=block_size * 2,
+                    input_product_type=InputProduct.RIFG,
+                    az_correction=az_correction,
+                    srg_correction=srg_correction,
+                    az_baseband_doppler=True
+                )
 
                 desired = ["mask"]
                 geocode_obj.data_interpolator = 'NEAREST'
@@ -830,27 +860,30 @@ def cpu_run(cfg, input_hdf5, output_hdf5, input_product_type=InputProduct.RUNW):
     t_all_elapsed = time.time() - t_all
     info_channel.log(f"Successfully ran geocode in {t_all_elapsed:.3f} seconds")
 
-def gpu_geocode_rasters(geocoded_dataset_flags,
-                        desired_geo_dataset_names,
-                        interpolation_methods,
-                        invalid_values,
-                        freq,
-                        pol_list,
-                        geogrid,
-                        rdr_geometry,
-                        dem_raster,
-                        lines_per_block,
-                        input_hdf5,
-                        dst_h5,
-                        subswaths,
-                        offset_layers=None,
-                        scratch_path='',
-                        compute_stats=True,
-                        input_product_type=InputProduct.RUNW,
-                        iono_sideband=False,
-                        is_runw_offset_product=False,
-                        az_correction=isce3.core.LUT2d(),
-                        srg_correction=isce3.core.LUT2d()):
+def gpu_geocode_rasters(
+    geocoded_dataset_flags: dict[str, bool],
+    desired_geo_dataset_names: list[str],
+    interpolation_methods: list[isce3.core.DataInterpMethod],
+    invalid_values: list[float],
+    freq: str,
+    pol_list: list[str],
+    geogrid: isce3.product.GeoGridParameters,
+    rdr_geometry: isce3.container.RadarGeometry,
+    dem_raster: isce3.io.Raster,
+    lines_per_block: int,
+    input_hdf5: str,
+    dst_h5: str,
+    subswaths: isce3.product.SubSwaths,
+    offset_layers: list[str] | None = None,
+    scratch_path: str = '',
+    compute_stats: bool = True,
+    input_product_type: InputProduct = InputProduct.RUNW,
+    iono_sideband: bool = False,
+    is_runw_offset_product: bool = False,
+    az_correction: isce3.core.LUT2d = isce3.core.LUT2d(),
+    srg_correction: isce3.core.LUT2d = isce3.core.LUT2d(),
+    native_doppler: isce3.core.LUT2d = isce3.core.LUT2d(),
+):
     '''
     Geocode datasets with common geogrid and radar geometry.
 
@@ -862,7 +895,7 @@ def gpu_geocode_rasters(geocoded_dataset_flags,
         value: True if dataset is to be geocoded
     desired_geo_dataset_names: list[str]
         List of dataset names that could be geocoded
-    interpolation_methods: list[isce3.core.interp_method.DataInterpMethod]
+    interpolation_methods: list[isce3.core.DataInterpMethod]
         List of data interpolation methods to be used per dataset
     invalid_values: list[float]
         List of invalid values to be used initialized each dataset raster
@@ -886,20 +919,25 @@ def gpu_geocode_rasters(geocoded_dataset_flags,
         Path to HDF5 where geocoded datasets are to be placed.
     subswaths: isce3.product.SubSwaths
         Possible subswath that could be used to mask geocoding.
-    offset_layers: list[str]
-        List of names of offset layers.
-    scratch_path: str
-        Path to scratch directory.
-    compute_stats: bool
-        True if stats are to be computed rasters.
-    input_product_type: isce3.io.gdal.GDALDataType
-        Enum describing type of product to geocoded.
-    iono_sideband: bool
-        True if iono rasters are to be geocoded.
-    az_correction: isce3.core.LUT2d()
-        Low-res LUT containing azimuth timing correction for geocoding
-    srg_correction: isce3.core.LUT2d()
-        Low-res LUT containing slant range timing correction for geocoding
+    offset_layers: list[str] or None, optional
+        List of names of offset layers. Defaults to None.
+    scratch_path: str, optional
+        Path to scratch directory. Defaults to an empty string.
+    compute_stats: bool, optional
+        True if stats are to be computed rasters. Defaults to True.
+    input_product_type: InputProduct, optional
+        Enum describing type of product to geocoded. Defaults to InputProduct.RUNW
+    iono_sideband: bool, optional
+        True if iono rasters are to be geocoded. Defaults to False.
+    az_correction: isce3.core.LUT2d(), optional
+        Low-res LUT containing azimuth timing correction for geocoding.
+        Defaults to an empty LUT.
+    srg_correction: isce3.core.LUT2d(), optional
+        Low-res LUT containing slant range timing correction for geocoding.
+        Defaults to an empty LUT.
+    native_doppler: isce3.core.LUT2d, optional
+        LUT of the input product's native doppler frequency. Used for basebanding
+        the signal during interpolation. Defaults to an empty LUT.
     '''
     # Get:
     # 1. List of output geocoded rasters asisce3.io.Rasters objects
@@ -907,44 +945,55 @@ def gpu_geocode_rasters(geocoded_dataset_flags,
     # 3. List of input rasters as isce3.io.Raster objects
     # 4. List of interpolation methods for geocoding each raster
     # 5. List of invalid values to initialize each raster with
-    (geocoded_rasters, geocoded_datasets, input_rasters,
-     interpolation_methods, invalid_values) = \
-        get_raster_lists(geocoded_dataset_flags, desired_geo_dataset_names, freq,
-                         pol_list, input_hdf5, dst_h5, offset_layers,
-                         scratch_path, input_product_type, iono_sideband,
-                         is_runw_offset_product,
-                         interpolation_methods, invalid_values)
+    (
+        geocoded_rasters,
+        geocoded_datasets,
+        input_rasters,
+        interpolation_methods,
+        invalid_values,
+    ) = get_raster_lists(
+        geocoded_dataset_flags, desired_geo_dataset_names, freq,
+        pol_list, input_hdf5, dst_h5, offset_layers,
+        scratch_path, input_product_type, iono_sideband,
+        is_runw_offset_product,
+        interpolation_methods, invalid_values
+    )
 
     if input_rasters:
         # Get raster types and convert to isce3.io.gdal.GDALDataType
-        convert_dtypes = {gdal.GDT_Unknown:  isce3.io.gdal.GDT_Unknown,
-                          gdal.GDT_Byte:     isce3.io.gdal.GDT_Byte,
-                          gdal.GDT_UInt16:   isce3.io.gdal.GDT_UInt16,
-                          gdal.GDT_Int16:    isce3.io.gdal.GDT_Int16,
-                          gdal.GDT_UInt32:   isce3.io.gdal.GDT_UInt32,
-                          gdal.GDT_Int32:    isce3.io.gdal.GDT_Unknown,
-                          gdal.GDT_Float32:  isce3.io.gdal.GDT_Float32,
-                          gdal.GDT_Float64:  isce3.io.gdal.GDT_Float64,
-                          gdal.GDT_CInt16:   isce3.io.gdal.GDT_CInt16,
-                          gdal.GDT_CInt32:   isce3.io.gdal.GDT_CInt32,
-                          gdal.GDT_CFloat32: isce3.io.gdal.GDT_CFloat32,
-                          gdal.GDT_CFloat64: isce3.io.gdal.GDT_CFloat64}
+        convert_dtypes = {
+            gdal.GDT_Unknown:  isce3.io.gdal.GDT_Unknown,
+            gdal.GDT_Byte:     isce3.io.gdal.GDT_Byte,
+            gdal.GDT_UInt16:   isce3.io.gdal.GDT_UInt16,
+            gdal.GDT_Int16:    isce3.io.gdal.GDT_Int16,
+            gdal.GDT_UInt32:   isce3.io.gdal.GDT_UInt32,
+            gdal.GDT_Int32:    isce3.io.gdal.GDT_Unknown,
+            gdal.GDT_Float32:  isce3.io.gdal.GDT_Float32,
+            gdal.GDT_Float64:  isce3.io.gdal.GDT_Float64,
+            gdal.GDT_CInt16:   isce3.io.gdal.GDT_CInt16,
+            gdal.GDT_CInt32:   isce3.io.gdal.GDT_CInt32,
+            gdal.GDT_CFloat32: isce3.io.gdal.GDT_CFloat32,
+            gdal.GDT_CFloat64: isce3.io.gdal.GDT_CFloat64,
+        }
         raster_types = [convert_dtypes[input_raster.datatype()]
                         for input_raster in input_rasters]
 
         # Create geocode object to perform geocoding
-        gpu_geocode_obj = \
-            isce3.cuda.geocode.Geocode(geogrid, rdr_geometry,
-                                       lines_per_block)
+        gpu_geocode_obj = isce3.cuda.geocode.Geocode(geogrid, rdr_geometry,
+                                                     lines_per_block)
 
-        gpu_geocode_obj.geocode_rasters(geocoded_rasters, input_rasters,
-                                        interpolation_methods,
-                                        raster_types,
-                                        invalid_values,
-                                        dem_raster,
-                                        subswaths=subswaths,
-                                        az_time_correction=az_correction,
-                                        srange_correction=srg_correction)
+        gpu_geocode_obj.geocode_rasters(
+            geocoded_rasters,
+            input_rasters,
+            interpolation_methods,
+            raster_types,
+            invalid_values,
+            dem_raster,
+            native_doppler=native_doppler,
+            subswaths=subswaths,
+            az_time_correction=az_correction,
+            srange_correction=srg_correction,
+        )
 
         if compute_stats:
             for raster, ds in zip(geocoded_rasters, geocoded_datasets):
@@ -1027,6 +1076,8 @@ def gpu_run(cfg, input_hdf5, output_hdf5, input_product_type=InputProduct.RUNW):
     slc = SLC(hdf5file=ref_hdf5)
     grid_zero_doppler = isce3.core.LUT2d()
     dem_raster = isce3.io.Raster(dem_file)
+
+    native_doppler = slc.getDopplerCentroid()
 
     # init geocode members
     orbit = slc.getOrbit()
@@ -1286,32 +1337,49 @@ def gpu_run(cfg, input_hdf5, output_hdf5, input_product_type=InputProduct.RUNW):
                 # Add water mask to GOFF product
                 add_water_to_mask(cfg, freq, geogrid, dst_h5, InputProduct.ROFF)
             else:
-                # Datasets from RIFG to be geocoded
-                desired_geo_dataset_names = ['coherence_magnitude',
-                                             'wrapped_interferogram']
-
-                # Interpolation method for respective datasets named above
-                interpolation_methods = [interp_method,
-                                         wrapped_igram_interp_method]
-
-                # Invalid values for respective datasets named above
-                invalid_values = [np.nan, np.nan]
-
                 # Create radar grid geometry required by RIFG product
                 rdr_geometry = isce3.container.RadarGeometry(radar_grid, orbit,
                                                              grid_zero_doppler)
 
                 # Geocode the coherence and wrapped interferogram
-                gpu_geocode_rasters(geocoded_dataset_flags,
-                                    desired_geo_dataset_names,
-                                    interpolation_methods, invalid_values,
-                                    freq, pol_list,
-                                    geogrid, rdr_geometry, dem_raster,
-                                    lines_per_block, input_hdf5, dst_h5,
-                                    subswaths=None,
-                                    input_product_type=InputProduct.RIFG,
-                                    az_correction=az_correction,
-                                    srg_correction=srg_correction)
+                gpu_geocode_rasters(
+                    geocoded_dataset_flags=geocoded_dataset_flags,
+                    desired_geo_dataset_names=["coherence_magnitude"],
+                    interpolation_methods=[interp_method],
+                    invalid_values=[np.nan],
+                    freq=freq,
+                    pol_list=pol_list,
+                    geogrid=geogrid,
+                    rdr_geometry=rdr_geometry,
+                    dem_raster=dem_raster,
+                    lines_per_block=lines_per_block,
+                    input_hdf5=input_hdf5,
+                    dst_h5=dst_h5,
+                    subswaths=None,
+                    input_product_type=InputProduct.RIFG,
+                    az_correction=az_correction,
+                    srg_correction=srg_correction,
+                )
+
+                gpu_geocode_rasters(
+                    geocoded_dataset_flags=geocoded_dataset_flags,
+                    desired_geo_dataset_names=["wrapped_interferogram"],
+                    interpolation_methods=[wrapped_igram_interp_method],
+                    invalid_values=[np.nan],
+                    freq=freq,
+                    pol_list=pol_list,
+                    geogrid=geogrid,
+                    rdr_geometry=rdr_geometry,
+                    dem_raster=dem_raster,
+                    lines_per_block=lines_per_block,
+                    input_hdf5=input_hdf5,
+                    dst_h5=dst_h5,
+                    subswaths=None,
+                    input_product_type=InputProduct.RIFG,
+                    az_correction=az_correction,
+                    srg_correction=srg_correction,
+                    native_doppler=native_doppler,
+                )
 
                 # Geocode subswath mask
                 desired_geo_dataset_names = ["mask"]

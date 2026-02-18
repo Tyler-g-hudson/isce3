@@ -109,25 +109,34 @@ def _output_array_valid(output_array, geo_array, which_output):
             raise ValueError(err_str)
 
 
-def geocode_slc(geo_data_blocks: Union[np.ndarray, list[np.ndarray]],
-                rdr_data_blocks: Union[np.ndarray, list[np.ndarray]],
-                dem_raster, radargrid,
-                geogrid, orbit, native_doppler, image_grid_doppler,
-                ellipsoid, threshold_geo2rdr, num_iter_geo2rdr,
-                mask_block=None,
-                sliced_radargrid=None, subswaths=None,
-                first_azimuth_line=0,  first_range_sample=0, flatten=True,
-                reramp=True,
-                az_carrier=isce3.core.LUT2d(),
-                rg_carrier=isce3.core.LUT2d(),
-                az_time_correction=isce3.core.LUT2d(),
-                srange_correction=isce3.core.LUT2d(),
-                flatten_with_corrected_srange=False,
-                invalid_value=np.nan + np.nan * 1j,
-                carrier_phase_block: Optional[np.ndarray] = np.array([],
-                                                                     dtype=np.float64),
-                flatten_phase_block: Optional[np.ndarray] = np.array([],
-                                                                     dtype=np.float64)):
+def geocode_slc(
+    geo_data_blocks: np.ndarray | list[np.ndarray],
+    rdr_data_blocks: np.ndarray | list[np.ndarray],
+    dem_raster: isce3.io.Raster,
+    radargrid: isce3.product.RadarGridParameters,
+    geogrid: isce3.product.GeoGridParameters,
+    orbit: isce3.core.Orbit,
+    native_doppler: isce3.core.LUT2d,
+    image_grid_doppler: isce3.core.LUT2d,
+    ellipsoid: isce3.core.Ellipsoid,
+    threshold_geo2rdr: float,
+    num_iter_geo2rdr: int,
+    mask_block: np.ndarray | None = None,
+    sliced_radargrid: isce3.product.RadarGridParameters = None,
+    subswaths: isce3.product.SubSwaths | None = None,
+    first_azimuth_line: int = 0,
+    first_range_sample: int = 0,
+    flatten: bool = True,
+    reramp: bool = True,
+    az_carrier: isce3.core.LUT2d = isce3.core.LUT2d(),
+    rg_carrier: isce3.core.LUT2d = isce3.core.LUT2d(),
+    az_time_correction: isce3.core.LUT2d = isce3.core.LUT2d(),
+    srange_correction: isce3.core.LUT2d = isce3.core.LUT2d(),
+    flatten_with_corrected_srange:bool = False,
+    invalid_value: np.complex64 = np.nan + np.nan * 1j,
+    carrier_phase_block: np.ndarray | None = np.array([], dtype=np.float64),
+    flatten_phase_block: np.ndarray | None = np.array([], dtype=np.float64)
+):
     '''
     Geocode a subset of pixels for multiple radar SLC arrays to a given geogrid.
     All radar SLC arrays share a common radar grid. All output geocoded arrays
